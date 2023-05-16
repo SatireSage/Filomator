@@ -17,7 +17,6 @@ function createWindow() {
             preload: path.join(__dirname, 'preload.js')
         }
     })
-    win.maximize();
 
     // Loading html file
     win.loadFile('index.html');
@@ -39,96 +38,59 @@ app.on('window-all-closed', function () {
     if (process.platform !== 'darwin') app.quit();
 })
 
-ipcMain.on("openExplorer", (event, args) => {
-    const { dialog } = require('electron');
 
-    // open dialog box
-    dialog.showOpenDialog({ properties: ['openDirectory'] }).then(result => {
-        console.log(result.canceled);
-        console.log(result.filePaths);
-
-        // convert result to Buffer object
-        let val = [];
-        val.push(Buffer.from(result.filePaths[0]));
-
-        // return value
-        event.reply('openExplorer', Buffer.concat(val));
-    }).catch(err => {
-        console.log(err)
-    });
-});
-
-ipcMain.handle("openExplorer", async (event, args) => {
-    return new Promise(resolve => {
-        const { dialog } = require('electron');
-
-        // open dialog box
-        dialog.showOpenDialog({ properties: ['openDirectory'] }).then(result => {
-            console.log(result.canceled)
-            console.log(result.filePaths)
-
-            // convert result to Buffer object
-            let val = [];
-            val.push(Buffer.from(result.filePaths[0]));
-
-            // return value
-            resolve(Buffer.concat(val));
-        }).catch(err => {
-            console.log(err)
-        });
-    });
-});
-
-
-ipcMain.on("runDataStorage", (event, args) => {
-    // create arguments to execute
-    var python = require('child_process').spawn('python', args.slice());
+// Receiving the front end code
+// We can actually modify it to specify which python files!
+ipcMain.on("toMain", (event, args) => {
+    var python = require('child_process').spawn('python', [`./python/${args[0]}`, args.slice(1)]);
     let result = [];
 
-    // For receiving data (receives as a readable stream)
+    // For receiving data (receives as a readable stream) 
     // - can be decoded into a string.
     python.stdout.on('data', function (data) {
         console.log("Python response: ", data);
         result.push(Buffer.from(data));
     });
     python.stdout.on('end', function() {
-        event.reply('runDataStorage', Buffer.concat(result));
-    });
+        event.reply('toMain', Buffer.concat(result));
+    })
 
     // Error handling
     python.stderr.on('data', (data) => {
         console.error(result);
-        event.reply('runDataStorage', data);
+        event.reply('toMain', data);
     });
 
     python.on('close', (code) => {
         console.log(`child process exited with code ${code}`);
-    });
+    })
 });
 
-ipcMain.handle("runDataStorage", async (event, args) => {
+ipcMain.handle("toMain", async (event, args) => {
     return new Promise(resolve => {
-        var python = require('child_process').spawn('python', args.slice());
+        var python = require('child_process').spawn('python', [`./python/${args[0]}`, args.slice(1)]);
         let result = [];
-
-        // For receiving data (receives as a readable stream)
+    
+        // For receiving data (receives as a readable stream) 
         // - can be decoded into a string.
         python.stdout.on('data', function (data) {
             console.log("Python response: ", data);
             result.push(Buffer.from(data));
         });
         python.stdout.on('end', function() {
+            console.log("Returning buffer");
             resolve(Buffer.concat(result));
-        });
-
+        })
+    
         // Error handling
         python.stderr.on('data', (data) => {
             console.error(result);
             return data;
         });
-
+    
         python.on('close', (code) => {
             console.log(`child process exited with code ${code}`);
-        });
-    });
-});
+        })
+    })
+})
+
